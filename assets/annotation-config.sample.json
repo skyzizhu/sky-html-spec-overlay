@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "pageLabel": "Example Login Page",
+  "ui": {
+    "boxColor": "#0F766E",
+    "boxFill": "rgba(15, 118, 110, 0.08)",
+    "labelTextColor": "#17212B",
+    "labelBackground": "rgba(255, 255, 255, 0.96)",
+    "labelFontSize": "12px",
+    "labelMaxWidth": "340px",
+    "lineColor": "#C2410C",
+    "lineThickness": 2,
+    "spacingTagFontSize": "11px"
+  },
+  "annotations": [
+    {
+      "id": "A-001",
+      "selector": ".login-title",
+      "label": "Login Title",
+      "kind": "text",
+      "mode": "actual",
+      "metrics": ["font-size", "line-height", "font-weight", "color"]
+    },
+    {
+      "id": "A-002",
+      "selector": ".email-input",
+      "label": "Email Input",
+      "kind": "control",
+      "mode": "actual",
+      "metrics": ["size", "border-radius", "padding"],
+      "compareTo": [
+        {
+          "selector": ".password-input",
+          "axis": "vertical",
+          "label": "Input Gap"
+        }
+      ]
+    },
+    {
+      "id": "A-003",
+      "selector": ".submit-btn",
+      "label": "Primary Button",
+      "kind": "control",
+      "mode": "override",
+      "metrics": ["size", "font-size", "color", "border-radius", "background-color"],
+      "overrides": {
+        "size": "160 x 44",
+        "font-size": "16px",
+        "color": "#FFFFFF",
+        "border-radius": "8px",
+        "background-color": "#0F766E"
+      }
+    }
+  ]
+}

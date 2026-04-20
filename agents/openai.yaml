@@ -1,0 +1,4 @@
+interface:
+  display_name: "HTML Spec Overlay"
+  short_description: "Generate annotated HTML handoff pages for developers"
+  default_prompt: "Use $sky-html-spec-overlay to generate an annotated HTML handoff page for frontend development."
