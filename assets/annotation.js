@@ -1088,6 +1088,12 @@
     return Math.max(min, Math.min(max, value));
   }
 
+  function overlapArea(a, b) {
+    var width = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+    var height = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+    return width * height;
+  }
+
   function chooseCalloutPosition(panel, rect) {
     panel.style.left = "-99999px";
     panel.style.top = "-99999px";
@@ -1101,23 +1107,73 @@
       right: window.scrollX + document.documentElement.clientWidth,
       bottom: window.scrollY + document.documentElement.clientHeight
     };
+    var viewportCenterX = (viewport.left + viewport.right) / 2;
+    var viewportCenterY = (viewport.top + viewport.bottom) / 2;
+    var rectCenterX = rect.left + rect.width / 2;
+    var rectCenterY = rect.top + rect.height / 2;
+    var horizontalPreference = rectCenterX <= viewportCenterX ? "right" : "left";
+    var verticalPreference = rectCenterY <= viewportCenterY ? "bottom" : "top";
     var gap = 24;
-    var candidates = [
-      { left: rect.right + gap, top: rect.top, anchor: "right" },
-      { left: rect.left - panelWidth - gap, top: rect.top, anchor: "left" },
-      { left: rect.left, top: rect.bottom + gap, anchor: "bottom" },
-      { left: rect.left, top: rect.top - panelHeight - gap, anchor: "top" }
+
+    function buildCandidate(left, top, anchor, priority) {
+      var clampedLeft = clamp(left, viewport.left + 12, Math.max(viewport.left + 12, viewport.right - panelWidth - 12));
+      var clampedTop = clamp(top, viewport.top + 12, Math.max(viewport.top + 12, viewport.bottom - panelHeight - 12));
+      return {
+        left: clampedLeft,
+        top: clampedTop,
+        right: clampedLeft + panelWidth,
+        bottom: clampedTop + panelHeight,
+        anchor: anchor,
+        priority: priority || 0
+      };
+    }
+
+    var candidates = [];
+    var rightPositions = [
+      buildCandidate(rect.right + gap, rectCenterY - panelHeight / 2, "right", horizontalPreference === "right" ? 0 : 40),
+      buildCandidate(rect.right + gap, rect.top, "right", horizontalPreference === "right" ? 4 : 44),
+      buildCandidate(rect.right + gap, rect.bottom - panelHeight, "right", horizontalPreference === "right" ? 8 : 48)
+    ];
+    var leftPositions = [
+      buildCandidate(rect.left - panelWidth - gap, rectCenterY - panelHeight / 2, "left", horizontalPreference === "left" ? 0 : 40),
+      buildCandidate(rect.left - panelWidth - gap, rect.top, "left", horizontalPreference === "left" ? 4 : 44),
+      buildCandidate(rect.left - panelWidth - gap, rect.bottom - panelHeight, "left", horizontalPreference === "left" ? 8 : 48)
+    ];
+    var bottomPositions = [
+      buildCandidate(rectCenterX - panelWidth / 2, rect.bottom + gap, "bottom", verticalPreference === "bottom" ? 12 : 52),
+      buildCandidate(rect.left, rect.bottom + gap, "bottom", verticalPreference === "bottom" ? 16 : 56),
+      buildCandidate(rect.right - panelWidth, rect.bottom + gap, "bottom", verticalPreference === "bottom" ? 20 : 60)
+    ];
+    var topPositions = [
+      buildCandidate(rectCenterX - panelWidth / 2, rect.top - panelHeight - gap, "top", verticalPreference === "top" ? 12 : 52),
+      buildCandidate(rect.left, rect.top - panelHeight - gap, "top", verticalPreference === "top" ? 16 : 56),
+      buildCandidate(rect.right - panelWidth, rect.top - panelHeight - gap, "top", verticalPreference === "top" ? 20 : 60)
     ];
 
+    if (horizontalPreference === "right") {
+      candidates = candidates.concat(rightPositions, leftPositions);
+    } else {
+      candidates = candidates.concat(leftPositions, rightPositions);
+    }
+    if (verticalPreference === "bottom") {
+      candidates = candidates.concat(bottomPositions, topPositions);
+    } else {
+      candidates = candidates.concat(topPositions, bottomPositions);
+    }
+
+    candidates.push(buildCandidate(viewport.right - panelWidth - 16, viewport.top + 16, rectCenterX <= viewportCenterX ? "right" : "left", 200));
+    candidates.push(buildCandidate(viewport.left + 16, viewport.top + 16, rectCenterX > viewportCenterX ? "left" : "right", 210));
+    candidates.push(buildCandidate(viewport.right - panelWidth - 16, viewport.bottom - panelHeight - 16, rectCenterY <= viewportCenterY ? "right" : "left", 220));
+    candidates.push(buildCandidate(viewport.left + 16, viewport.bottom - panelHeight - 16, rectCenterY <= viewportCenterY ? "left" : "right", 230));
+
     var best = null;
-    candidates.forEach(function (candidate, index) {
-      candidate.left = clamp(candidate.left, viewport.left + 12, Math.max(viewport.left + 12, viewport.right - panelWidth - 12));
-      candidate.top = clamp(candidate.top, viewport.top + 12, Math.max(viewport.top + 12, viewport.bottom - panelHeight - 12));
-      candidate.right = candidate.left + panelWidth;
-      candidate.bottom = candidate.top + panelHeight;
-      candidate.penalty = index * 10;
-      if (rectsOverlap(candidate, rect, 16)) {
-        candidate.penalty += 1000;
+    candidates.forEach(function (candidate) {
+      var overlap = overlapArea(candidate, rect);
+      var distanceX = candidate.anchor === "right" ? Math.abs(candidate.left - rect.right) : candidate.anchor === "left" ? Math.abs(rect.left - candidate.right) : Math.abs((candidate.left + candidate.right) / 2 - rectCenterX);
+      var distanceY = candidate.anchor === "bottom" ? Math.abs(candidate.top - rect.bottom) : candidate.anchor === "top" ? Math.abs(rect.top - candidate.bottom) : Math.abs((candidate.top + candidate.bottom) / 2 - rectCenterY);
+      candidate.penalty = candidate.priority + overlap * 100 + distanceX * 0.08 + distanceY * 0.08;
+      if (rectsOverlap(candidate, rect, 12)) {
+        candidate.penalty += 400;
       }
       if (!best || candidate.penalty < best.penalty) {
         best = candidate;
@@ -1125,11 +1181,7 @@
     });
 
     panel.style.visibility = "";
-    return best || {
-      left: clamp(rect.right + gap, viewport.left + 12, Math.max(viewport.left + 12, viewport.right - panelWidth - 12)),
-      top: clamp(rect.top, viewport.top + 12, Math.max(viewport.top + 12, viewport.bottom - panelHeight - 12)),
-      anchor: "right"
-    };
+    return best || buildCandidate(rect.right + gap, rect.top, "right", 0);
   }
 
   function formatCalloutText(item, metrics) {
@@ -1153,22 +1205,7 @@
     box.style.width = rect.width + "px";
     box.style.height = rect.height + "px";
 
-    if (annotationStyle() === "callout") {
-      box.style.background = "transparent";
-      root.appendChild(box);
-
-      var panel = document.createElement("div");
-      panel.className = "hso-label hso-callout-label";
-      var lines = [];
-      lines.push("<strong>" + escapeHtml(item.id ? item.id + " · " + (item.label || "当前对象") : (item.label || "当前对象")) + "</strong>");
-      Object.keys(metrics).forEach(function (name) {
-        lines.push("<span class='hso-metric'><b>" + escapeHtml(metricLabel(name)) + "</b>: " + escapeHtml(metrics[name]) + "</span>");
-      });
-      panel.innerHTML = lines.join("");
-
-      root.appendChild(panel);
-
-      var placement = chooseCalloutPosition(panel, rect);
+    function placePanelOutside(panel, placement) {
       panel.style.left = placement.left + "px";
       panel.style.top = placement.top + "px";
       panel.style.visibility = "";
@@ -1199,13 +1236,30 @@
         endY = placement.top + panel.offsetHeight / 2;
       }
       drawLeaderLine(root, startX, startY, endX, endY);
+    }
+
+    if (annotationStyle() === "callout") {
+      box.style.background = "transparent";
+      root.appendChild(box);
+
+      var panel = document.createElement("div");
+      panel.className = "hso-label hso-callout-label";
+      var lines = [];
+      lines.push("<strong>" + escapeHtml(item.id ? item.id + " · " + (item.label || "当前对象") : (item.label || "当前对象")) + "</strong>");
+      Object.keys(metrics).forEach(function (name) {
+        lines.push("<span class='hso-metric'><b>" + escapeHtml(metricLabel(name)) + "</b>: " + escapeHtml(metrics[name]) + "</span>");
+      });
+      panel.innerHTML = lines.join("");
+
+      root.appendChild(panel);
+
+      var placement = chooseCalloutPosition(panel, rect);
+      placePanelOutside(panel, placement);
       return;
     }
 
     var panel = document.createElement("div");
-    panel.className = "hso-label";
-    panel.style.left = rect.left + "px";
-    panel.style.top = Math.max(0, rect.top - 8) + "px";
+    panel.className = "hso-label hso-callout-label";
 
     var title = item.id ? item.id + " · " + (item.label || selector) : (item.label || selector);
     var lines = ["<strong>" + title + "</strong>", "<span class='hso-metric'><code>" + selector + "</code></span>"];
@@ -1216,6 +1270,7 @@
 
     root.appendChild(box);
     root.appendChild(panel);
+    placePanelOutside(panel, chooseCalloutPosition(panel, rect));
   }
 
   function drawSpacing(root, sourceRect, targetRect, axis, label) {
